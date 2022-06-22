@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Memory Box</title>
+<link href="https://fonts.googleapis.com/css?family=Lato&display=swap" rel="stylesheet">
+<style>
+* {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background-color: #f0f0f0;
+  font-family: 'Lato', sans-serif;
+}
+
+#container {
+  text-align: center;
+}
+#game-container {
+  display: inline-block;
+  border: 1px solid black;
+  margin-top: 10px;
+  background-color: #f5f5f5;
+}
+
+#head {
+  padding: 20px;
+}
+#title {
+  font-size: 35px;
+  margin-bottom: 15px;
+}
+#box-type-option {
+  padding: 5px;
+}
+
+#foot {
+  padding: 10px;
+}
+
+.box {
+  display: inline-block;
+  margin: 5px;
+  width: 80px;
+  height: 80px;
+  border: 1px solid black;
+  background-color: white;
+
+  transition: all 0.13s ease;
+  -o-transition: all 0.13s ease;
+  -moz-transition: all 0.13s ease;
+  -webkit-transition: all 0.13s ease;
+}
+
+.game-btn {
+  width: 100px;
+  height: 45px;
+  border: 2px solid black;
+  background-color: white;
+  color: black;
+  font-family: 'Lato', sans-serif;
+  font-size: 18px;
+  box-shadow: 5px 5px 3px #ccc;
+  cursor: default;
+
+  transition: all 0.15s ease;
+  -o-transition: all 0.15s ease;
+  -moz-transition: all 0.15s ease;
+  -webkit-transition: all 0.15s ease;
+}
+.game-btn:hover {
+  background-color: black;
+  color: white;
+  cursor: pointer;
+}
+.game-btn:active {
+  box-shadow: 0px 0px 0px #ccc;
+}
+.game-btn:focus {
+  outline: none;
+}
+#start-btn {
+  display: block;
+  margin: 0 auto;
+}
+#restart-btn {
+  display: none;
+  margin: 0 auto;
+}
+
+#check {
+  display: none;
+}
+</style>
+</head>
+<body>
+  <div id="container">
+    <div id="game-container">
+      <div id="head">
+        <p id="title">Memory Box</p>
+        <select name="box-rows" id="box-rows-select">
+          <option value="3" selected="selected">3 rows (default)</option>
+          <option value="4">4 rows</option>
+          <option value="5">5 rows</option>
+          <option value="6">6 rows</option>
+          <option value="7">7 rows</option>
+          <option value="8">8 rows</option>
+        </select>
+        <select name="box-cols" id="box-cols-select">
+          <option value="3" selected="selected">3 columns (default)</option>
+          <option value="4">4 columns</option>
+          <option value="5">5 columns</option>
+          <option value="6">6 columns</option>
+          <option value="7">7 columns</option>
+          <option value="8">8 columns</option>
+        </select>
+      </div>
+
+      <div id="game-screen">
+
+      </div>
+      <div id="foot">
+        <button class="game-btn" id="start-btn">start</button>
+        <button class="game-btn" id="restart-btn">restart</button>
+      </div>
+    </div>
+  </div>
+<script>
+const gameContainer = document.querySelector('#game-container');
+const gameScreen = document.querySelector('#game-screen');
+const selectRows = document.querySelector('#box-rows-select');
+const selectCols = document.querySelector('#box-cols-select');
+const startBtn = document.querySelector('#start-btn');
+const restartBtn = document.querySelector('#restart-btn');
+
+// variables needed during the game
+var gameOn = false;
+var chosenBoxes = [];
+var boxesToClick = [];
+var pickedBoxes = [];
+var timeToPick = false;
+var showCorrectBoxes;
+// inputted values
+var boxCount;
+var boxDim;
+var rememberTime = 2000;
+
+window.onload = function() {
+  // when start button is clicked
+  startBtn.onclick = function() {
+    init();
+    startBtn.style.display = "none";
+    startGame(boxCount);
+  }
+  restartBtn.onclick = function() {
+    restartGame();
+    this.style.display = "none";
+  }
+}
+
+var box;
+// initialize the variables needed to start the game
+function init() {
+  // removes the current boxes
+  while(gameScreen.firstChild != null) {
+    gameScreen.removeChild(gameScreen.firstChild);
+  }
+  // get the selected size option then add the boxes
+  boxDim = {
+    rows: parseInt(selectRows.options[selectRows.selectedIndex].value),
+    cols: parseInt(selectCols.options[selectCols.selectedIndex].value)
+  }
+  // add the boxes to the DOM
+  var rowDOM, colDOM;
+  for(let i = 0; i < boxDim.rows; i++) {
+    rowDOM = document.createElement('div');
+    rowDOM.classList.add('row');
+    rowDOM.classList.add('row' + (i+1));
+    for(let j = 0; j < boxDim.cols; j++) {
+      colDOM = document.createElement('div');
+      colDOM.classList.add('col' + (j+1));
+      colDOM.classList.add('box');
+      rowDOM.appendChild(colDOM);
+    }
+    gameScreen.appendChild(rowDOM);
+  }
+  // create a 2D array (box[row][column]) and initializes each array item to the DOM row and col
+  box = new Array(boxDim.rows);
+  for(let row=1; row<boxDim.rows+1; row++) {
+    box[row] = new Array(boxDim.cols);
+  }
+  for(let row=1; row<boxDim.rows+1; row++) {
+    for(let col=1; col<boxDim.cols+1; col++) {
+      box[row][col] = document.querySelector(".row"+row + " > .col"+col);
+      box[row][col].selected = false;
+    }
+  }
+}
+
+// start the game
+function startGame() {
+
+  gameOn = true;
+
+  boxCount = Math.round(((((boxDim.rows + boxDim.cols) / 2)) + (((boxDim.rows + boxDim.cols) / 2) - 1)));
+  startBtn.style.display = "none";
+  clearBoxes();
+  // shows the boxes, then hides them and allows the user to pick
+  setTimeout(function() {
+    timeToPick = false;
+    showRandomBoxes(boxCount);
+    setTimeout(function() {
+      clearBoxes();
+      timeToPick = true;
+      startPickState();
+    }, rememberTime);
+  }, 1000);
+
+}
+
+// GAME FUNCTIONS
+// function to show random boxes
+function showRandomBoxes(numOfBoxes) {
+  var randRow, randCol, allEmptyBoxes, randomEmptyBox;
+  for(let i = 0; i < numOfBoxes; i++) {
+    allEmptyBoxes = getEmptyBoxes();
+    randEmptyBox = Math.floor(Math.random() * allEmptyBoxes.length);
+    randRow = allEmptyBoxes[randEmptyBox].row;
+    randCol = allEmptyBoxes[randEmptyBox].col;
+
+    // adds the current box to the chosenBoxes variable and sets it to black
+    addBox(randRow, randCol);
+    fillBox(randRow, randCol, "black");
+  }
+}
+// function to add box to the chosenBoxes variable
+function addBox(row, col) {
+  chosenBoxes.push({
+    row: row,
+    col: col
+  });
+  boxesToClick.push({
+    row: row,
+    col: col
+  });
+}
+
+// function to allow and set the box clicking
+function startPickState() {
+  var numberOfPicks = 0;
+
+  // sets action events for each box
+  for(let row = 1; row < boxDim.rows+1; row++) {
+    for(let col = 1; col < boxDim.cols+1; col++) {
+
+      // change outline on hover
+      box[row][col].onmouseover = function() {
+        if (timeToPick) {
+          if (pickedBoxes.length > 0) {
+            // runs through all the picked boxes; if hovering over a picked box, doesn't change/shade in
+            for(let i = 0; i < pickedBoxes.length; i++) {
+              if(pickedBoxes[i].row == row && pickedBoxes[i].col == col) {
+                return;
+              }
+            }
+            fillBox(row, col, "#f1f1f1");
+          }
+          else if (pickedBoxes.length == 0) {
+            fillBox(row, col, "#f1f1f1");
+          }
+        }
+      }
+      box[row][col].onmouseout = function() {
+        if(timeToPick) {
+          if (pickedBoxes.length > 0) {
+            for(let i = 0; i < pickedBoxes.length; i++) {
+              if(pickedBoxes[i].row == row && pickedBoxes[i].col == col) {
+                return;
+              }
+            }
+            fillBox(row, col, "white");
+          }
+          else if (pickedBoxes.length == 0) {
+            fillBox(row, col, "white");
+          }
+        }
+      }
+
+      box[row][col].onmousedown = (function() {
+        // makes sure it's time to pick
+        if(timeToPick) {
+          // first, make sure that the box that they are clicking isn't a box they already picked
+          for (var i = 0; i < pickedBoxes.length; i++) {
+            if(row == pickedBoxes[i].row && col == pickedBoxes[i].col) {
+              console.log("hey! you already picked that box!");
+              return;
+            }
+          }
+          // if user clicks correct box
+          if(checkMyBox(row,col) == true) {
+            pickedBoxes.push({
+              row: row,
+              col: col
+            });
+            numberOfPicks += 1;
+            fillBox(row, col, "black");
+            // if user clicks on all the chosen/correct boxes, they turn green
+            if(numberOfPicks == boxCount) {
+              console.log("gg m8");
+              chosenBoxes.map(box => {
+                fillBox(box.row, box.col, "green");
+              });
+              timeToPick = false;
+              restartBtn.style.display = "block";
+            }
+          }
+          // if user clicks wrong box
+          else if(checkMyBox(row,col) == false) {
+            timeToPick = false;
+            fillBox(row, col, "red");
+            console.log("u suck");
+            showCorrectBoxes = setInterval(function() {
+              boxesToClick.map(box => {
+                fillBox(box.row, box.col, "gray");
+              });
+              setTimeout(function() {
+                boxesToClick.map(box => {
+                  fillBox(box.row, box.col, "white");
+                });
+              }, 250);
+            }, 500)
+
+            restartBtn.style.display = "block";
+          }
+        }
+        else {
+          console.log("hey! it's not time to pick.");
+          return;
+        }
+      });
+
+    }
+  }
+
+}
+
+// function to check if the selected box are the correct chosen boxes
+function checkMyBox(row, col) {
+  for(let i = 0; i < boxesToClick.length; i++) {
+    if(row == boxesToClick[i].row && col == boxesToClick[i].col) {
+      boxesToClick.splice(i,1);
+      return true;
+    }
+  }
+  return false;
+}
+
+// function to find an empty box (duplicates)
+function getEmptyBoxes() {
+  // algorithm: run through each row individually, and in each row check each box/col individually and if that box is not equal to any values in the chosen boxes in that row, welp - it's an empty humpty dumpty!
+  var emptyBoxes = [];
+  var tempChosenCols = [];
+  var tempRow, tempCol;
+  // check each row individually
+  for(let row = 1; row < boxDim.rows+1; row++) {
+    // adds the chosen boxes in the current row to the tempChosenCols array
+    for (let i = 0; i < boxesToClick.length; i++) {
+      if(boxesToClick[i].row == row) {
+        tempChosenCols.push(boxesToClick[i].col);
+      }
+    }
+    // runs through each box (cols) in the current row and if that box is not equal to any values in tempChosenCols (which are the filled boxes in the current row) then that box is an empty box
+    for(let col = 1; col < boxDim.cols+1; col++) {
+      var emptyAmount = 0;
+      for(let i = 0; i < tempChosenCols.length; i++) {
+        if(col != tempChosenCols[i]) {
+          emptyAmount += 1;
+        }
+      }
+      if(emptyAmount == tempChosenCols.length) {
+        emptyBoxes.push({
+          row: row,
+          col: col
+        });
+      }
+    }
+    // clears the current chosen boxes in the current row
+    tempChosenCols = [];
+  }
+
+  return emptyBoxes;
+}
+
+// clears the boxes
+function clearBoxes() {
+  for(let row = 1; row < boxDim.rows+1; row++) {
+    for(let col = 1; col < boxDim.cols+1; col++) {
+      fillBox(row, col, "white");
+    }
+  }
+}
+// function to fill in a given box
+function fillBox(row, col, color) {
+  box[row][col].style.backgroundColor = color;
+}
+
+// function to restart the game
+function restartGame() {
+  boxesToClick = [];
+  chosenBoxes = [];
+  pickedBoxes = [];
+  clearInterval(showCorrectBoxes);
+  clearBoxes();
+  init();
+  startGame(boxCount);
+}
+
+</script>
+</body>
+</html>
